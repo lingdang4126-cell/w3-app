@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Share2, Globe } from 'lucide-react';
+import { ref, remove } from 'firebase/database';
+import { database } from '../utils/firebase';
 import JournalArchive from './JournalArchive';
 import SharedDiary from './SharedDiary';
 import SharedPlaza from './SharedPlaza';
+import MySharedDiaries from './MySharedDiaries';
 
 export default function Journal() {
   const [articles, setArticles] = useState(() => {
@@ -18,7 +21,7 @@ export default function Journal() {
     content: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'archive', 'plaza'
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'archive', 'plaza', 'myshared'
   const [sharingArticle, setSharingArticle] = useState(null);
   const [viewingSharedId, setViewingSharedId] = useState(null);
 
@@ -68,9 +71,30 @@ export default function Journal() {
     setCurrentArticle(article);
   };
 
-  const deleteArticle = (id) => {
-    if (confirm('确定删除这篇文章吗？')) {
-      setArticles(prev => prev.filter(article => article.id !== id));
+  const deleteArticle = async (id) => {
+    if (confirm('确定删除这篇文章吗？\n\n注意：如果该文章已共享，共享版本也会被删除。')) {
+      try {
+        // 检查是否有对应的共享日记
+        const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
+        if (sharedRecords[id]) {
+          // 如果存在共享日记，从 Firebase 删除
+          const sharedId = sharedRecords[id];
+          const diaryRef = ref(database, `shared_diaries/${sharedId}`);
+          await remove(diaryRef);
+          
+          // 从 localStorage 删除映射记录
+          delete sharedRecords[id];
+          localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
+          
+          console.log('✅ 已删除共享日记 ' + sharedId);
+        }
+        
+        // 删除本地文章
+        setArticles(prev => prev.filter(article => article.id !== id));
+      } catch (error) {
+        console.error('删除时出错：', error);
+        alert('❌ 删除失败：' + error.message);
+      }
     }
   };
 
@@ -215,6 +239,17 @@ export default function Journal() {
             <Globe size={18} />
             共享广场
           </button>
+          <button
+            onClick={() => setViewMode('myshared')}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+              viewMode === 'myshared'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <Share2 size={18} />
+            我的共享
+          </button>
           <span className="text-slate-600 text-sm ml-auto">
             共 {articles.length} 篇文章
           </span>
@@ -227,6 +262,13 @@ export default function Journal() {
 
       {viewMode === 'plaza' && (
         <SharedPlaza onViewDiary={viewSharedDiary} />
+      )}
+
+      {viewMode === 'myshared' && (
+        <MySharedDiaries articles={articles} onEditShare={(sharedId, article) => {
+          setSharingArticle(article);
+          setViewingSharedId(sharedId);
+        }} />
       )}
 
       {viewMode === 'list' && (

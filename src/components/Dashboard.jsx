@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Github } from 'lucide-react';
 
 export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState({
@@ -96,6 +97,30 @@ export default function Dashboard({ onNavigate }) {
           <li>• 定期在"导出中心"备份数据到 JSON 文件</li>
           <li>• 支持导入他人分享的 JSON 模板</li>
         </ul>
+      </div>
+
+      {/* GitHub 链接 */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl shadow-lg p-6 border border-slate-700 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+              <Github size={20} />
+              开源项目
+            </h3>
+            <p className="text-slate-300 text-sm">
+              W³ System 是一个开源项目，欢迎在 GitHub 上查看代码和贡献！
+            </p>
+          </div>
+          <a
+            href="https://github.com/lingdang4126-cell/w3-app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white text-slate-800 hover:bg-slate-100 px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Github size={18} />
+            访问 GitHub
+          </a>
+        </div>
       </div>
     </div>
   );

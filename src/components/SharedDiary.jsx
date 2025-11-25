@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, MessageCircle, Copy, Check, Globe, Lock } from 'lucide-react';
-import { ref, set, get, push, onValue, off } from 'firebase/database';
+import { Share2, MessageCircle, Copy, Check, Globe, Lock, Trash2 } from 'lucide-react';
+import { ref, set, get, push, onValue, off, remove } from 'firebase/database';
 import { database } from '../utils/firebase';
 
 export default function SharedDiary({ article, sharedId: initialSharedId, onClose }) {
@@ -100,11 +100,17 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
           sharedAt: new Date().toISOString(),
           shareMode: shareMode
         },
-        comments: {}
+        comments: {},
+        creatorId: article.id // 保存原文章ID，便于后续删除
       };
 
       const diaryRef = ref(database, `shared_diaries/${newSharedId}`);
       await set(diaryRef, sharedData);
+      
+      // 在本地存储中记录共享ID，便于删除同步
+      const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
+      sharedRecords[article.id] = newSharedId;
+      localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
       
       setSharedId(newSharedId);
       setViewingMode('viewing');
@@ -195,6 +201,35 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // 删除共享日记
+  const deleteSharedDiary = async () => {
+    setIsLoading(true);
+
+    try {
+      // 从 Firebase 删除共享日记
+      const diaryRef = ref(database, `shared_diaries/${sharedId}`);
+      await remove(diaryRef);
+
+      // 从 localStorage 删除映射记录
+      const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
+      // 找到对应的 article ID 并删除
+      Object.keys(sharedRecords).forEach(key => {
+        if (sharedRecords[key] === sharedId) {
+          delete sharedRecords[key];
+        }
+      });
+      localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
+
+      alert('✅ 共享已删除');
+      onClose();
+    } catch (error) {
+      alert('❌ 删除失败：' + error.message);
+      console.error('Firebase error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const displayArticle = viewingArticle || article;
 
   return (
@@ -256,14 +291,14 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                       <div className="text-xs text-slate-500">任何人都能看</div>
                     </button>
                     <button
-                      onClick={() => setShareMode('private')}
+                      onClick={() => setShareMode('friends')}
                       className={`p-3 rounded-lg border-2 transition-all ${
-                        shareMode === 'private'
+                        shareMode === 'friends'
                           ? 'border-purple-500 bg-purple-50'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <Lock className={`mx-auto mb-1 ${shareMode === 'private' ? 'text-purple-500' : 'text-slate-400'}`} size={20} />
+                      <Lock className={`mx-auto mb-1 ${shareMode === 'friends' ? 'text-purple-500' : 'text-slate-400'}`} size={20} />
                       <div className="text-sm font-medium">朋友可见</div>
                       <div className="text-xs text-slate-500">需要共享码</div>
                     </button>
@@ -323,22 +358,35 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-slate-700">共享码</label>
-                    <button
-                      onClick={copySharedCode}
-                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      {copied ? (
-                        <>
-                          <Check size={16} />
-                          已复制
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={16} />
-                          复制
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={copySharedCode}
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        {copied ? (
+                          <>
+                            <Check size={16} />
+                            已复制
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={16} />
+                            复制
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('确定要删除这个共享吗？')) {
+                            deleteSharedDiary();
+                          }
+                        }}
+                        className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 size={16} />
+                        删除
+                      </button>
+                    </div>
                   </div>
                   <code className="block bg-white px-4 py-2 rounded border border-slate-300 text-sm font-mono break-all">
                     {sharedId}

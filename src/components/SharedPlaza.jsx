@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, MessageCircle, RefreshCw, Eye, Filter } from 'lucide-react';
+import { Globe, Users, MessageCircle, RefreshCw, Eye, Filter } from 'lucide-react';
 import { ref, get } from 'firebase/database';
 import { database } from '../utils/firebase';
 
@@ -241,9 +241,17 @@ export default function SharedPlaza({ onViewDiary }) {
                 {/* 共享模式标签 */}
                 {article.shareMode === 'public' && (
                   <div className="mt-3">
-                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-medium">
                       <Globe size={12} />
-                      公开分享
+                      所有人可见
+                    </span>
+                  </div>
+                )}
+                {article.shareMode === 'friends' && (
+                  <div className="mt-3">
+                    <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">
+                      <Users size={12} />
+                      朋友可见
                     </span>
                   </div>
                 )}
