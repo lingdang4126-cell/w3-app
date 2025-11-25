@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Edit, Trash2, Globe, Lock, Users } from 'lucide-react';
+import { Eye, Edit, Trash2, Globe, Lock, Users, Share2 } from 'lucide-react';
 import { ref, get, remove } from 'firebase/database';
 import { database } from '../utils/firebase';
 
