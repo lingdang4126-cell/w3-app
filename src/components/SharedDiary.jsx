@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, MessageCircle, Copy, Check, Globe, Lock, Trash2 } from 'lucide-react';
-import { ref, set, get, push, onValue, off, remove } from 'firebase/database';
+import { Share2, MessageCircle, Copy, Check, Globe, Lock } from 'lucide-react';
+import { ref, set, get, push, onValue, off } from 'firebase/database';
 import { database } from '../utils/firebase';
+import { getUserId } from '../utils/user';
 
-export default function SharedDiary({ article, sharedId: initialSharedId, onClose }) {
-  const [sharedId, setSharedId] = useState(initialSharedId || null);
-  const [viewingMode, setViewingMode] = useState(initialSharedId ? 'viewing' : 'creating');
+export default function SharedDiary({ article, sharedId: propSharedId, onClose }) {
+  const [sharedId, setSharedId] = useState(propSharedId || null);
   const [username, setUsername] = useState('');
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -13,9 +13,8 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [shareMode, setShareMode] = useState('public');
-  const [viewingArticle, setViewingArticle] = useState(null);
+  const [articleData, setArticleData] = useState(article || null);
 
-  // 从本地获取用户名
   useEffect(() => {
     const savedUsername = localStorage.getItem('w3_username');
     if (savedUsername) {
@@ -23,14 +22,30 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     }
   }, []);
 
-  // 初始化时加载查看的文章
   useEffect(() => {
-    if (initialSharedId && !viewingArticle) {
-      loadSharedDiary(initialSharedId);
+    if (propSharedId) {
+      loadSharedDiary(propSharedId);
     }
-  }, [initialSharedId]);
+  }, [propSharedId]);
 
-  // 实时监听评论
+  const loadSharedDiary = async (id) => {
+    setIsLoading(true);
+    try {
+      const diaryRef = ref(database, `shared_diaries/${id}`);
+      const snapshot = await get(diaryRef);
+      
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setArticleData(data.article);
+        setSharedId(id);
+      }
+    } catch (error) {
+      alert('❌ 加载失败：' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!sharedId) return;
 
@@ -53,35 +68,10 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     return () => off(commentsRef);
   }, [sharedId]);
 
-  // 加载共享日记
-  const loadSharedDiary = async (diaryId) => {
-    setIsLoading(true);
-    try {
-      const diaryRef = ref(database, `shared_diaries/${diaryId}`);
-      const snapshot = await get(diaryRef);
-      
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        setViewingArticle(data.article);
-        setSharedId(diaryId);
-        setViewingMode('viewing');
-      } else {
-        alert('❌ 日记不存在或已被删除');
-      }
-    } catch (error) {
-      alert('❌ 加载失败：' + error.message);
-      console.error('Firebase error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 生成共享ID
   const generateSharedId = () => {
     return 'diary_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   };
 
-  // 创建共享日记
   const createSharedDiary = async () => {
     if (!username.trim()) {
       alert('请先设置你的昵称');
@@ -93,27 +83,23 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     const newSharedId = generateSharedId();
 
     try {
+      const currentUserId = getUserId(); // 获取当前用户 ID
+
       const sharedData = {
         article: {
-          ...article,
+          ...articleData,
           author: username,
+          authorId: currentUserId, // 记录作者 ID
           sharedAt: new Date().toISOString(),
           shareMode: shareMode
         },
-        comments: {},
-        creatorId: article.id // 保存原文章ID，便于后续删除
+        comments: {}
       };
 
       const diaryRef = ref(database, `shared_diaries/${newSharedId}`);
       await set(diaryRef, sharedData);
       
-      // 在本地存储中记录共享ID，便于删除同步
-      const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
-      sharedRecords[article.id] = newSharedId;
-      localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
-      
       setSharedId(newSharedId);
-      setViewingMode('viewing');
       alert('✅ 共享创建成功！');
     } catch (error) {
       alert('❌ 创建失败：' + error.message);
@@ -123,7 +109,6 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     }
   };
 
-  // 加入共享日记
   const joinSharedDiary = async () => {
     if (!joinCode.trim()) {
       alert('请输入共享码');
@@ -148,9 +133,8 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
       }
 
       const data = snapshot.val();
-      setViewingArticle(data.article);
+      setArticleData(data.article);
       setSharedId(joinCode);
-      setViewingMode('viewing');
       alert('✅ 加入成功！');
     } catch (error) {
       alert('❌ 加入失败：' + error.message);
@@ -160,7 +144,6 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     }
   };
 
-  // 添加评论
   const addComment = async () => {
     if (!newComment.trim()) {
       alert('评论不能为空');
@@ -175,11 +158,14 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     setIsLoading(true);
 
     try {
+      const currentUserId = getUserId(); // 获取当前用户 ID
+
       const commentsRef = ref(database, `shared_diaries/${sharedId}/comments`);
       const newCommentRef = push(commentsRef);
       
       await set(newCommentRef, {
         author: username,
+        authorId: currentUserId, // 记录评论者 ID
         content: newComment,
         timestamp: Date.now(),
         date: new Date().toLocaleString('zh-CN')
@@ -194,53 +180,20 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
     }
   };
 
-  // 复制共享码
   const copySharedCode = () => {
     navigator.clipboard.writeText(sharedId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 删除共享日记
-  const deleteSharedDiary = async () => {
-    setIsLoading(true);
-
-    try {
-      // 从 Firebase 删除共享日记
-      const diaryRef = ref(database, `shared_diaries/${sharedId}`);
-      await remove(diaryRef);
-
-      // 从 localStorage 删除映射记录
-      const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
-      // 找到对应的 article ID 并删除
-      Object.keys(sharedRecords).forEach(key => {
-        if (sharedRecords[key] === sharedId) {
-          delete sharedRecords[key];
-        }
-      });
-      localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
-
-      alert('✅ 共享已删除');
-      onClose();
-    } catch (error) {
-      alert('❌ 删除失败：' + error.message);
-      console.error('Firebase error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const displayArticle = viewingArticle || article;
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* 头部 */}
         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 z-10">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <Share2 className="text-blue-500" />
-              {viewingMode === 'viewing' && initialSharedId ? '日记详情' : '共享日记'}
+              {propSharedId ? '共享日记' : '分享日记'}
             </h2>
             <button
               onClick={onClose}
@@ -252,31 +205,35 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
         </div>
 
         <div className="p-6 space-y-6">
-          {/* 创建模式 */}
-          {viewingMode === 'creating' && !sharedId && (
-            <>
-              {/* 设置昵称 */}
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  你的昵称
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="输入你的昵称..."
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          {!sharedId && !propSharedId && (
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                你的昵称
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="输入你的昵称..."
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
 
-              {/* 创建共享 */}
+          {!sharedId && (
+            <div className="space-y-4">
               <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-6 border border-blue-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-2">📤 分享这篇日记</h3>
-                <p className="text-slate-600 text-sm mb-4">创建共享后，朋友可以通过共享码查看和评论</p>
+                <h3 className="text-lg font-bold text-slate-800 mb-2">
+                  📤 分享这篇日记
+                </h3>
+                <p className="text-slate-600 text-sm mb-4">
+                  创建共享后，朋友可以通过共享码或共享广场查看和评论
+                </p>
 
-                {/* 共享模式选择 */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">共享模式</label>
+                <div className="mb-4 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    共享模式
+                  </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => setShareMode('public')}
@@ -287,20 +244,20 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                       }`}
                     >
                       <Globe className={`mx-auto mb-1 ${shareMode === 'public' ? 'text-blue-500' : 'text-slate-400'}`} size={20} />
-                      <div className="text-sm font-medium">所有人可见</div>
-                      <div className="text-xs text-slate-500">任何人都能看</div>
+                      <div className="text-sm font-medium text-slate-700">所有人可见</div>
+                      <div className="text-xs text-slate-500">出现在共享广场</div>
                     </button>
                     <button
-                      onClick={() => setShareMode('friends')}
+                      onClick={() => setShareMode('private')}
                       className={`p-3 rounded-lg border-2 transition-all ${
-                        shareMode === 'friends'
+                        shareMode === 'private'
                           ? 'border-purple-500 bg-purple-50'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <Lock className={`mx-auto mb-1 ${shareMode === 'friends' ? 'text-purple-500' : 'text-slate-400'}`} size={20} />
-                      <div className="text-sm font-medium">朋友可见</div>
-                      <div className="text-xs text-slate-500">需要共享码</div>
+                      <Lock className={`mx-auto mb-1 ${shareMode === 'private' ? 'text-purple-500' : 'text-slate-400'}`} size={20} />
+                      <div className="text-sm font-medium text-slate-700">朋友可见</div>
+                      <div className="text-xs text-slate-500">仅通过共享码</div>
                     </button>
                   </div>
                 </div>
@@ -314,10 +271,13 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                 </button>
               </div>
 
-              {/* 加入共享 */}
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-2">📥 加入朋友的日记</h3>
-                <p className="text-slate-600 text-sm mb-4">输入朋友分享的共享码</p>
+                <h3 className="text-lg font-bold text-slate-800 mb-2">
+                  📥 加入朋友的日记
+                </h3>
+                <p className="text-slate-600 text-sm mb-4">
+                  输入朋友分享的共享码
+                </p>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -335,58 +295,33 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                   </button>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
-          {/* 查看模式 */}
-          {viewingMode === 'viewing' && (
-            <>
-              {/* 设置昵称 */}
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <label className="block text-sm font-medium text-slate-700 mb-2">你的昵称</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="输入你的昵称..."
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* 共享码 */}
-              {sharedId && (
+          {sharedId && articleData && (
+            <div className="space-y-6">
+              {!propSharedId && (
                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-slate-700">共享码</label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={copySharedCode}
-                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        {copied ? (
-                          <>
-                            <Check size={16} />
-                            已复制
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={16} />
-                            复制
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm('确定要删除这个共享吗？')) {
-                            deleteSharedDiary();
-                          }
-                        }}
-                        className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                        删除
-                      </button>
-                    </div>
+                    <label className="text-sm font-medium text-slate-700">
+                      共享码（分享给朋友）
+                    </label>
+                    <button
+                      onClick={copySharedCode}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {copied ? (
+                        <>
+                          <Check size={16} />
+                          已复制
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={16} />
+                          复制
+                        </>
+                      )}
+                    </button>
                   </div>
                   <code className="block bg-white px-4 py-2 rounded border border-slate-300 text-sm font-mono break-all">
                     {sharedId}
@@ -394,45 +329,45 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                 </div>
               )}
 
-              {/* 文章展示 */}
-              {displayArticle && (
-                <div className="bg-slate-50 rounded-lg p-6 border border-slate-200">
-                  <h3 className="text-2xl font-bold text-slate-800 mb-2">
-                    {displayArticle.title || '(无标题)'}
-                  </h3>
-                  <div className="flex items-center gap-3 text-sm text-slate-600 mb-4 flex-wrap">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                      {displayArticle.category || '未分类'}
-                    </span>
-                    <span>作者：{displayArticle.author || '匿名'}</span>
-                    <span>·</span>
-                    <span>{new Date(displayArticle.sharedAt || new Date()).toLocaleString('zh-CN')}</span>
-                  </div>
-                  <div className="bg-white p-4 rounded-lg border border-slate-200">
-                    <p className="text-slate-700 whitespace-pre-wrap">
-                      {displayArticle.content || '(无内容)'}
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-2">
+                  {articleData.title}
+                </h3>
+                <p className="text-sm text-slate-600 mb-3">
+                  作者：{articleData.author} · {articleData.date}
+                </p>
+                <p className="text-slate-700 whitespace-pre-wrap">
+                  {articleData.content}
+                </p>
+              </div>
 
-              {/* 评论区 */}
               <div className="border border-slate-200 rounded-lg">
-                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2 text-slate-700 font-medium">
-                  <MessageCircle size={18} />
-                  评论 ({comments.length})
+                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    <MessageCircle size={18} />
+                    评论 ({comments.length})
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    实时同步
+                  </div>
                 </div>
 
-                {/* 评论列表 */}
                 <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
                   {comments.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8">还没有评论，来说点什么吧~</p>
+                    <p className="text-center text-slate-400 py-8">
+                      还没有评论，来说点什么吧~
+                    </p>
                   ) : (
                     comments.map(comment => (
                       <div key={comment.id} className="bg-slate-50 rounded-lg p-3">
                         <div className="flex items-start justify-between mb-2">
-                          <span className="font-medium text-slate-800">{comment.author}</span>
-                          <span className="text-xs text-slate-500">{comment.date}</span>
+                          <span className="font-medium text-slate-800">
+                            {comment.author}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {comment.date}
+                          </span>
                         </div>
                         <p className="text-slate-700">{comment.content}</p>
                       </div>
@@ -440,28 +375,45 @@ export default function SharedDiary({ article, sharedId: initialSharedId, onClos
                   )}
                 </div>
 
-                {/* 添加评论 */}
                 <div className="p-4 border-t border-slate-200">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && addComment()}
-                      placeholder="写下你的评论..."
-                      className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={addComment}
-                      disabled={isLoading}
-                      className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-slate-300"
-                    >
-                      发送
-                    </button>
-                  </div>
+                  {username ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && addComment()}
+                        placeholder="写下你的评论..."
+                        className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={addComment}
+                        disabled={isLoading}
+                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:bg-slate-300"
+                      >
+                        发送
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="输入你的昵称后可以评论..."
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
-            </>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  💡 提示：评论会实时同步，所有人都能立即看到最新内容
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Github } from 'lucide-react';
+import { Shield } from 'lucide-react';
+import AdminPanel from './AdminPanel';
 
 export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState({
@@ -9,8 +10,9 @@ export default function Dashboard({ onNavigate }) {
     articleCount: 0
   });
 
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
   useEffect(() => {
-    // 计算战室数据
     const warroomData = localStorage.getItem('w3_warroom');
     if (warroomData) {
       const data = JSON.parse(warroomData);
@@ -24,7 +26,6 @@ export default function Dashboard({ onNavigate }) {
       }));
     }
 
-    // 计算日记数据
     const journalData = localStorage.getItem('w3_journal');
     if (journalData) {
       const articles = JSON.parse(journalData);
@@ -46,14 +47,26 @@ export default function Dashboard({ onNavigate }) {
 
   return (
     <div className="space-y-6">
-      {/* 欢迎卡片 */}
       <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-200">
-        <h2 className="text-3xl font-bold text-slate-800 mb-2">欢迎回来 👋</h2>
-        <p className="text-slate-600">{today}</p>
-        <p className="text-slate-500 text-sm mt-1">当前是第 {currentWeek} 周</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-800 mb-2">欢迎回来 👋</h2>
+            <p className="text-slate-600">{today}</p>
+            <p className="text-slate-500 text-sm mt-1">当前是第 {currentWeek} 周</p>
+          </div>
+          
+          {/* 管理员按钮 */}
+          <button
+            onClick={() => setShowAdminPanel(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-700 rounded-lg transition-all border border-amber-200"
+            title="管理员设置"
+          >
+            <Shield size={18} />
+            <span className="text-sm font-medium">管理员</span>
+          </button>
+        </div>
       </div>
 
-      {/* 数据卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <QuickCard 
           title="本周进度" 
@@ -75,7 +88,6 @@ export default function Dashboard({ onNavigate }) {
         />
       </div>
 
-      {/* 快速操作 */}
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
         <h3 className="text-xl font-bold text-slate-800 mb-4">快速操作</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -89,39 +101,20 @@ export default function Dashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* 使用提示 */}
       <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl shadow-lg p-6 border border-blue-200">
         <h3 className="text-lg font-bold text-blue-800 mb-2">💡 使用提示</h3>
         <ul className="space-y-2 text-slate-700 text-sm">
           <li>• 所有数据自动保存在浏览器本地，刷新不会丢失</li>
           <li>• 定期在"导出中心"备份数据到 JSON 文件</li>
           <li>• 支持导入他人分享的 JSON 模板</li>
+          <li>• 点击右上角"管理员"设置管理权限</li>
         </ul>
       </div>
 
-      {/* GitHub 链接 */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl shadow-lg p-6 border border-slate-700 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-              <Github size={20} />
-              开源项目
-            </h3>
-            <p className="text-slate-300 text-sm">
-              W³ System 是一个开源项目，欢迎在 GitHub 上查看代码和贡献！
-            </p>
-          </div>
-          <a
-            href="https://github.com/lingdang4126-cell/w3-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-white text-slate-800 hover:bg-slate-100 px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Github size={18} />
-            访问 GitHub
-          </a>
-        </div>
-      </div>
+      {/* 管理员面板 */}
+      {showAdminPanel && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
     </div>
   );
 }

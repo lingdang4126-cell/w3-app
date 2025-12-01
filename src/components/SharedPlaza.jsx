@@ -1,69 +1,92 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Users, MessageCircle, RefreshCw, Eye, Filter } from 'lucide-react';
-import { ref, get } from 'firebase/database';
+import { Globe, MessageCircle, RefreshCw, Eye, Filter, Trash2, Shield } from 'lucide-react';
+import { ref, get, remove } from 'firebase/database';
 import { database } from '../utils/firebase';
+import { canDelete, isAdmin, getCurrentUser } from '../utils/user';
 
 export default function SharedPlaza({ onViewDiary }) {
   const [sharedDiaries, setSharedDiaries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
-  const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // 加载所有共享日记
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
+
   const loadSharedDiaries = async () => {
     setIsLoading(true);
-    setError(null);
     try {
-      console.log('开始加载共享日记...');
       const diariesRef = ref(database, 'shared_diaries');
       const snapshot = await get(diariesRef);
       
-      console.log('获取快照完成，数据存在:', snapshot.exists());
-      
       if (snapshot.exists()) {
         const data = snapshot.val();
-        console.log('原始数据:', data);
-        
         const diariesList = Object.entries(data).map(([key, value]) => ({
           id: key,
           ...value
         }));
         
-        console.log('处理后的日记列表:', diariesList);
-        
-        // 按分享时间排序（最新的在前）
         diariesList.sort((a, b) => {
-          const timeA = new Date(a.article?.sharedAt || 0).getTime();
-          const timeB = new Date(b.article?.sharedAt || 0).getTime();
+          const timeA = new Date(a.article.sharedAt).getTime();
+          const timeB = new Date(b.article.sharedAt).getTime();
           return timeB - timeA;
         });
         
         setSharedDiaries(diariesList);
       } else {
-        console.log('没有共享日记数据');
         setSharedDiaries([]);
       }
     } catch (error) {
-      console.error('加载失败详细信息:', error);
-      setError(error.message);
-      setSharedDiaries([]);
+      console.error('加载失败:', error);
+      alert('❌ 加载共享日记失败：' + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 初始加载
   useEffect(() => {
-    console.log('组件已挂载，开始加载共享日记');
     loadSharedDiaries();
   }, []);
 
-  // 过滤日记
+  // 删除共享日记
+  const deleteDiary = async (diary, e) => {
+    e.stopPropagation(); // 阻止触发查看详情
+
+    // 权限检查
+    if (!canDelete(diary.article.authorId)) {
+      alert('⚠️ 你没有权限删除这篇日记');
+      return;
+    }
+
+    const confirmMsg = isAdmin() 
+      ? `🛡️ 管理员操作\n\n确定要删除《${diary.article.title}》吗？\n作者：${diary.article.author}` 
+      : `确定要删除你的日记《${diary.article.title}》吗？`;
+
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const diaryRef = ref(database, `shared_diaries/${diary.id}`);
+      await remove(diaryRef);
+      
+      alert('✅ 删除成功');
+      await loadSharedDiaries(); // 重新加载列表
+    } catch (error) {
+      alert('❌ 删除失败：' + error.message);
+      console.error('删除失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const filteredDiaries = filterCategory === 'all'
     ? sharedDiaries
     : sharedDiaries.filter(diary => diary.article.category === filterCategory);
 
-  // 格式化时间
   const formatTime = (isoString) => {
     const date = new Date(isoString);
     const now = new Date();
@@ -82,6 +105,17 @@ export default function SharedPlaza({ onViewDiary }) {
 
   return (
     <div className="space-y-6">
+      {/* 管理员标识 */}
+      {currentUser?.isAdmin && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-amber-800">
+            <Shield size={20} className="text-amber-600" />
+            <span className="font-medium">管理员模式</span>
+            <span className="text-sm text-amber-600">· 你可以删除任何共享日记</span>
+          </div>
+        </div>
+      )}
+
       {/* 顶部操作栏 */}
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg p-6 text-white">
         <div className="flex items-center justify-between mb-4">
@@ -171,13 +205,6 @@ export default function SharedPlaza({ onViewDiary }) {
       </div>
 
       {/* 日记列表 */}
-      {error && (
-        <div className="bg-red-50 rounded-2xl shadow-lg p-6 border border-red-200">
-          <p className="text-red-700 font-medium">❌ 加载失败：{error}</p>
-          <p className="text-red-600 text-sm mt-2">请打开浏览器开发者工具（F12）查看详细错误信息</p>
-        </div>
-      )}
-      
       {isLoading ? (
         <div className="bg-white rounded-2xl shadow-lg p-12 border border-slate-200 text-center">
           <RefreshCw size={48} className="animate-spin mx-auto mb-4 text-blue-500" />
@@ -192,35 +219,48 @@ export default function SharedPlaza({ onViewDiary }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredDiaries.map(diary => {
-            // 安全获取数据，防止 undefined
-            const article = diary.article || {};
-            const title = article.title || '(无标题)';
-            const category = article.category || '未分类';
-            const author = article.author || '匿名';
-            const sharedAt = article.sharedAt || new Date().toISOString();
-            const content = article.content || '';
-            const commentCount = diary.comments ? Object.keys(diary.comments).length : 0;
+            const hasDeletePermission = canDelete(diary.article.authorId);
             
             return (
               <div
                 key={diary.id}
-                className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-all cursor-pointer"
+                className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-all cursor-pointer relative"
                 onClick={() => onViewDiary(diary.id)}
               >
+                {/* 删除按钮 */}
+                {hasDeletePermission && (
+                  <button
+                    onClick={(e) => deleteDiary(diary, e)}
+                    className="absolute top-4 right-4 p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
+                    title={isAdmin() ? '管理员删除' : '删除我的分享'}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
+
                 {/* 文章信息 */}
-                <div className="mb-4">
+                <div className="mb-4 pr-12">
                   <h3 className="text-xl font-bold text-slate-800 mb-2 line-clamp-1">
-                    {title}
+                    {diary.article.title}
                   </h3>
-                  <div className="flex items-center gap-3 text-sm text-slate-600 mb-3">
-                    <span>{category}</span>
+                  <div className="flex items-center gap-3 text-sm text-slate-600 mb-3 flex-wrap">
+                    <span>{diary.article.category}</span>
                     <span>·</span>
-                    <span>by {author}</span>
+                    <span>by {diary.article.author}</span>
+                    {isAdmin() && (
+                      <>
+                        <span>·</span>
+                        <span className="text-amber-600 flex items-center gap-1">
+                          <Shield size={12} />
+                          管理员可见
+                        </span>
+                      </>
+                    )}
                     <span>·</span>
-                    <span>{formatTime(sharedAt)}</span>
+                    <span>{formatTime(diary.article.sharedAt)}</span>
                   </div>
                   <p className="text-slate-600 line-clamp-2 text-sm">
-                    {content.length > 0 ? content.substring(0, 100) + '...' : '(无内容)'}
+                    {diary.article.content.substring(0, 100)}...
                   </p>
                 </div>
 
@@ -229,7 +269,7 @@ export default function SharedPlaza({ onViewDiary }) {
                   <div className="flex items-center gap-4 text-sm text-slate-500">
                     <div className="flex items-center gap-1">
                       <MessageCircle size={16} />
-                      <span>{commentCount} 评论</span>
+                      <span>{diary.comments ? Object.keys(diary.comments).length : 0} 评论</span>
                     </div>
                   </div>
                   <button className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
@@ -239,22 +279,19 @@ export default function SharedPlaza({ onViewDiary }) {
                 </div>
 
                 {/* 共享模式标签 */}
-                {article.shareMode === 'public' && (
-                  <div className="mt-3">
-                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-medium">
+                <div className="mt-3 flex items-center gap-2">
+                  {diary.article.shareMode === 'public' && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
                       <Globe size={12} />
-                      所有人可见
+                      公开分享
                     </span>
-                  </div>
-                )}
-                {article.shareMode === 'friends' && (
-                  <div className="mt-3">
-                    <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">
-                      <Users size={12} />
-                      朋友可见
+                  )}
+                  {hasDeletePermission && !isAdmin() && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                      我的分享
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             );
           })}
