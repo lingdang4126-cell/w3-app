@@ -3,6 +3,7 @@ import { Globe, MessageCircle, RefreshCw, Eye, Filter, Trash2, Shield } from 'lu
 import { ref, get, remove } from 'firebase/database';
 import { database } from '../utils/firebase';
 import { canDelete, isAdmin, getCurrentUser } from '../utils/user';
+import Announcement from './Announcement';
 
 export default function SharedPlaza({ onViewDiary }) {
   const [sharedDiaries, setSharedDiaries] = useState([]);
@@ -105,6 +106,9 @@ export default function SharedPlaza({ onViewDiary }) {
 
   return (
     <div className="space-y-6">
+      {/* 公告区域 */}
+      <Announcement isAdmin={currentUser?.isAdmin} />
+
       {/* 管理员标识 */}
       {currentUser?.isAdmin && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
