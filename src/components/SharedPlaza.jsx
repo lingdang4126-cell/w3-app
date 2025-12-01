@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, MessageCircle, RefreshCw, Eye, Filter, Trash2, Shield } from 'lucide-react';
+import { Globe, MessageCircle, RefreshCw, Eye, Filter, Trash2, Shield, Megaphone } from 'lucide-react';
 import { ref, get, remove } from 'firebase/database';
 import { database } from '../utils/firebase';
 import { canDelete, isAdmin, getCurrentUser } from '../utils/user';
@@ -10,6 +10,7 @@ export default function SharedPlaza({ onViewDiary }) {
   const [isLoading, setIsLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
   const [currentUser, setCurrentUser] = useState(null);
+  const [showAnnouncement, setShowAnnouncement] = useState(false);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -106,8 +107,22 @@ export default function SharedPlaza({ onViewDiary }) {
 
   return (
     <div className="space-y-6">
-      {/* 公告区域 */}
-      <Announcement isAdmin={currentUser?.isAdmin} />
+      {/* 公告弹窗 */}
+      {showAnnouncement && (
+        <Announcement onClose={() => setShowAnnouncement(false)} />
+      )}
+
+      {/* 公告入口按钮 */}
+      <button
+        onClick={() => setShowAnnouncement(true)}
+        className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl p-4 flex items-center justify-between transition-all shadow-md hover:shadow-lg"
+      >
+        <div className="flex items-center gap-3">
+          <Megaphone size={24} />
+          <span className="font-bold text-lg">📢 公告中心</span>
+        </div>
+        <span className="text-white/80 text-sm">点击查看最新公告 →</span>
+      </button>
 
       {/* 管理员标识 */}
       {currentUser?.isAdmin && (
