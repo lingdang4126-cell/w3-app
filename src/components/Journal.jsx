@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Share2, Globe } from 'lucide-react';
-import { ref, remove } from 'firebase/database';
-import { database } from '../utils/firebase';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import JournalArchive from './JournalArchive';
 import SharedDiary from './SharedDiary';
 import SharedPlaza from './SharedPlaza';
-import MySharedDiaries from './MySharedDiaries';
+import MarkdownEditor from './MarkdownEditor';
 
 export default function Journal() {
   const [articles, setArticles] = useState(() => {
@@ -21,7 +21,7 @@ export default function Journal() {
     content: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'archive', 'plaza', 'myshared'
+  const [viewMode, setViewMode] = useState('list');
   const [sharingArticle, setSharingArticle] = useState(null);
   const [viewingSharedId, setViewingSharedId] = useState(null);
 
@@ -71,30 +71,9 @@ export default function Journal() {
     setCurrentArticle(article);
   };
 
-  const deleteArticle = async (id) => {
-    if (confirm('确定删除这篇文章吗？\n\n注意：如果该文章已共享，共享版本也会被删除。')) {
-      try {
-        // 检查是否有对应的共享日记
-        const sharedRecords = JSON.parse(localStorage.getItem('w3_shared_records') || '{}');
-        if (sharedRecords[id]) {
-          // 如果存在共享日记，从 Firebase 删除
-          const sharedId = sharedRecords[id];
-          const diaryRef = ref(database, `shared_diaries/${sharedId}`);
-          await remove(diaryRef);
-          
-          // 从 localStorage 删除映射记录
-          delete sharedRecords[id];
-          localStorage.setItem('w3_shared_records', JSON.stringify(sharedRecords));
-          
-          console.log('✅ 已删除共享日记 ' + sharedId);
-        }
-        
-        // 删除本地文章
-        setArticles(prev => prev.filter(article => article.id !== id));
-      } catch (error) {
-        console.error('删除时出错：', error);
-        alert('❌ 删除失败：' + error.message);
-      }
+  const deleteArticle = (id) => {
+    if (confirm('确定删除这篇文章吗？')) {
+      setArticles(prev => prev.filter(article => article.id !== id));
     }
   };
 
@@ -115,6 +94,7 @@ export default function Journal() {
     article.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // 写作模式
   if (isWriting) {
     return (
       <div className="space-y-4">
@@ -140,51 +120,51 @@ export default function Journal() {
           </div>
 
           <div className="space-y-4">
-            <input
-              type="text"
-              value={currentArticle.title}
-              onChange={(e) => setCurrentArticle(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="输入标题..."
-              className="w-full text-2xl font-bold px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
-            <select
-              value={currentArticle.category}
-              onChange={(e) => setCurrentArticle(prev => ({ ...prev, category: e.target.value }))}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="学习">📚 学习</option>
-              <option value="生活">🌈 生活</option>
-              <option value="随笔">✍️ 随笔</option>
-              <option value="技术">💻 技术</option>
-              <option value="思考">💭 思考</option>
-            </select>
-
-            <textarea
-              value={currentArticle.content}
-              onChange={(e) => setCurrentArticle(prev => ({ ...prev, content: e.target.value }))}
-              placeholder="开始写作...支持 Markdown 格式"
-              className="w-full h-96 px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
-            />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-800 mb-4">📄 预览</h3>
-          <div className="prose max-w-none">
-            <h1 className="text-2xl font-bold mb-2">{currentArticle.title || '未命名'}</h1>
-            <p className="text-slate-600 text-sm mb-4">
-              {currentArticle.category} · {new Date().toLocaleDateString('zh-CN')}
-            </p>
-            <div className="whitespace-pre-wrap text-slate-700">
-              {currentArticle.content || '内容为空'}
+            {/* 标题输入 */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                标题
+              </label>
+              <input
+                type="text"
+                value={currentArticle.title}
+                onChange={(e) => setCurrentArticle(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="输入标题..."
+                className="w-full text-2xl font-bold px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
+
+            {/* 分类选择 */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                分类
+              </label>
+              <select
+                value={currentArticle.category}
+                onChange={(e) => setCurrentArticle(prev => ({ ...prev, category: e.target.value }))}
+                className="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="学习">📚 学习</option>
+                <option value="生活">🌈 生活</option>
+                <option value="随笔">✍️ 随笔</option>
+                <option value="技术">💻 技术</option>
+                <option value="思考">💭 思考</option>
+              </select>
+            </div>
+
+            {/* Markdown 编辑器 */}
+            <MarkdownEditor
+              value={currentArticle.content}
+              onChange={(newContent) => setCurrentArticle(prev => ({ ...prev, content: newContent }))}
+              showPreview={true}
+            />
           </div>
         </div>
       </div>
     );
   }
 
+  // 列表/归档/广场模式
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
@@ -239,17 +219,6 @@ export default function Journal() {
             <Globe size={18} />
             共享广场
           </button>
-          <button
-            onClick={() => setViewMode('myshared')}
-            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-              viewMode === 'myshared'
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <Share2 size={18} />
-            我的共享
-          </button>
           <span className="text-slate-600 text-sm ml-auto">
             共 {articles.length} 篇文章
           </span>
@@ -262,13 +231,6 @@ export default function Journal() {
 
       {viewMode === 'plaza' && (
         <SharedPlaza onViewDiary={viewSharedDiary} />
-      )}
-
-      {viewMode === 'myshared' && (
-        <MySharedDiaries articles={articles} onEditShare={(sharedId, article) => {
-          setSharingArticle(article);
-          setViewingSharedId(sharedId);
-        }} />
       )}
 
       {viewMode === 'list' && (
@@ -294,9 +256,12 @@ export default function Journal() {
                       <span>·</span>
                       <span>{article.date}</span>
                     </div>
-                    <p className="text-slate-600 line-clamp-2">
-                      {article.content.substring(0, 150)}...
-                    </p>
+                    {/* Markdown 预览 */}
+                    <div className="prose prose-sm max-w-none line-clamp-2 text-slate-600">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {article.content.substring(0, 150) + '...'}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                   <div className="flex gap-2 ml-4">
                     <button
@@ -327,7 +292,6 @@ export default function Journal() {
         </div>
       )}
 
-      {/* 分享弹窗 */}
       {sharingArticle && (
         <SharedDiary
           article={sharingArticle}
@@ -335,7 +299,6 @@ export default function Journal() {
         />
       )}
 
-      {/* 查看共享日记弹窗 */}
       {viewingSharedId && (
         <SharedDiary
           sharedId={viewingSharedId}

@@ -1,6 +1,6 @@
 {
   "name": "w3-app",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "W³ - Weekly War Room & Writing Journal",
   "type": "module",
   "scripts": {
@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^10.7.1",
+    "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "lucide-react": "^0.263.1",
-    "firebase": "^10.7.1"
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
