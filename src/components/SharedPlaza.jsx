@@ -5,12 +5,27 @@ import { database } from '../utils/firebase';
 import { canDelete, isAdmin, getCurrentUser } from '../utils/user';
 import Announcement from './Announcement';
 
+// 默认分类（与 Journal 组件保持一致）
+const DEFAULT_CATEGORIES = [
+  { id: 'study', name: '学习', emoji: '📚', color: 'blue' },
+  { id: 'life', name: '生活', emoji: '🌈', color: 'green' },
+  { id: 'essay', name: '随笔', emoji: '✍️', color: 'purple' },
+  { id: 'tech', name: '技术', emoji: '💻', color: 'cyan' },
+  { id: 'thought', name: '思考', emoji: '💭', color: 'amber' },
+];
+
 export default function SharedPlaza({ onViewDiary }) {
   const [sharedDiaries, setSharedDiaries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
   const [currentUser, setCurrentUser] = useState(null);
   const [showAnnouncement, setShowAnnouncement] = useState(false);
+
+  // 从 localStorage 读取分类
+  const [categories, setCategories] = useState(() => {
+    const saved = localStorage.getItem('w3_journal_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -41,7 +56,11 @@ export default function SharedPlaza({ onViewDiary }) {
       }
     } catch (error) {
       console.error('加载失败:', error);
-      alert('❌ 加载共享日记失败：' + error.message);
+      // 更友好的错误处理，不使用 alert 阻断用户
+      if (error.message?.includes('Permission denied')) {
+        console.warn('Firebase 权限被拒绝，可能需要更新数据库规则');
+      }
+      setSharedDiaries([]);
     } finally {
       setIsLoading(false);
     }
@@ -170,56 +189,19 @@ export default function SharedPlaza({ onViewDiary }) {
           >
             全部
           </button>
-          <button
-            onClick={() => setFilterCategory('学习')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterCategory === '学习'
-                ? 'bg-white text-purple-600'
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            📚 学习
-          </button>
-          <button
-            onClick={() => setFilterCategory('生活')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterCategory === '生活'
-                ? 'bg-white text-purple-600'
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            🌈 生活
-          </button>
-          <button
-            onClick={() => setFilterCategory('技术')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterCategory === '技术'
-                ? 'bg-white text-purple-600'
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            💻 技术
-          </button>
-          <button
-            onClick={() => setFilterCategory('随笔')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterCategory === '随笔'
-                ? 'bg-white text-purple-600'
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            ✍️ 随笔
-          </button>
-          <button
-            onClick={() => setFilterCategory('思考')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              filterCategory === '思考'
-                ? 'bg-white text-purple-600'
-                : 'bg-white/20 hover:bg-white/30'
-            }`}
-          >
-            💭 思考
-          </button>
+          {categories.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setFilterCategory(category.name)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                filterCategory === category.name
+                  ? 'bg-white text-purple-600'
+                  : 'bg-white/20 hover:bg-white/30'
+              }`}
+            >
+              {category.emoji} {category.name}
+            </button>
+          ))}
         </div>
       </div>
 

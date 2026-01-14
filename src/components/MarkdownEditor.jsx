@@ -9,10 +9,14 @@ import {
   List, 
   Image,
   Eye,
-  EyeOff
+  EyeOff,
+  Table,
+  CheckSquare,
+  Strikethrough
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 export default function MarkdownEditor({ value, onChange, showPreview = true }) {
   const textareaRef = useRef(null);
@@ -53,6 +57,11 @@ export default function MarkdownEditor({ value, onChange, showPreview = true }) 
       action: () => insertFormat('*', '*', '斜体文字'),
     },
     {
+      icon: <Strikethrough size={18} />,
+      label: '删除线',
+      action: () => insertFormat('~~', '~~', '删除线文字'),
+    },
+    {
       icon: <Heading size={18} />,
       label: '标题',
       action: () => {
@@ -88,7 +97,7 @@ export default function MarkdownEditor({ value, onChange, showPreview = true }) 
     },
     {
       icon: <List size={18} />,
-      label: '列表',
+      label: '无序列表',
       action: () => {
         const textarea = textareaRef.current;
         const start = textarea.selectionStart;
@@ -99,9 +108,33 @@ export default function MarkdownEditor({ value, onChange, showPreview = true }) 
       },
     },
     {
+      icon: <CheckSquare size={18} />,
+      label: '任务列表',
+      action: () => {
+        const textarea = textareaRef.current;
+        const start = textarea.selectionStart;
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+        const newText = value.substring(0, lineStart) + '- [ ] ' + value.substring(lineStart);
+        onChange(newText);
+        setTimeout(() => textarea.focus(), 0);
+      },
+    },
+    {
       icon: <Image size={18} />,
       label: '图片',
       action: () => insertFormat('![', '](https://example.com/image.jpg)', '图片描述'),
+    },
+    {
+      icon: <Table size={18} />,
+      label: '表格',
+      action: () => {
+        const tableTemplate = '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n';
+        const textarea = textareaRef.current;
+        const start = textarea.selectionStart;
+        const newText = value.substring(0, start) + tableTemplate + value.substring(start);
+        onChange(newText);
+        setTimeout(() => textarea.focus(), 0);
+      },
     },
   ];
 
@@ -179,8 +212,75 @@ export default function MarkdownEditor({ value, onChange, showPreview = true }) 
               实时预览
             </label>
             <div className="w-full h-96 px-4 py-3 border border-slate-300 rounded-lg bg-white overflow-y-auto">
-              <div className="prose prose-slate max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <div className="prose prose-slate max-w-none prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-blockquote:my-3 prose-pre:my-3">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={{
+                    // 自定义组件渲染
+                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-slate-800 border-b pb-2 mb-4" {...props} />,
+                    h2: ({node, ...props}) => <h2 className="text-xl font-bold text-slate-700 mt-6 mb-3" {...props} />,
+                    h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-slate-700 mt-4 mb-2" {...props} />,
+                    p: ({node, ...props}) => <p className="text-slate-600 leading-relaxed my-3" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-6 my-3 space-y-1" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-3 space-y-1" {...props} />,
+                    li: ({node, children, ...props}) => {
+                      // 检查是否是任务列表项
+                      const hasCheckbox = node?.children?.[0]?.type === 'element' && 
+                                         node?.children?.[0]?.tagName === 'input';
+                      if (hasCheckbox) {
+                        return <li className="list-none flex items-start gap-2" {...props}>{children}</li>;
+                      }
+                      return <li className="text-slate-600" {...props}>{children}</li>;
+                    },
+                    blockquote: ({node, ...props}) => (
+                      <blockquote className="border-l-4 border-blue-400 pl-4 py-2 my-4 bg-blue-50 rounded-r-lg italic text-slate-600" {...props} />
+                    ),
+                    code: ({node, inline, className, children, ...props}) => {
+                      const match = /language-(\w+)/.exec(className || '');
+                      return !inline ? (
+                        <pre className="bg-slate-800 text-slate-100 p-4 rounded-lg overflow-x-auto my-4">
+                          <code className={className} {...props}>{children}</code>
+                        </pre>
+                      ) : (
+                        <code className="bg-slate-100 text-red-600 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    a: ({node, ...props}) => (
+                      <a className="text-blue-500 hover:text-blue-700 underline" target="_blank" rel="noopener noreferrer" {...props} />
+                    ),
+                    table: ({node, ...props}) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="min-w-full border-collapse border border-slate-300" {...props} />
+                      </div>
+                    ),
+                    th: ({node, ...props}) => (
+                      <th className="border border-slate-300 bg-slate-100 px-4 py-2 text-left font-semibold" {...props} />
+                    ),
+                    td: ({node, ...props}) => (
+                      <td className="border border-slate-300 px-4 py-2" {...props} />
+                    ),
+                    hr: ({node, ...props}) => <hr className="my-6 border-slate-300" {...props} />,
+                    img: ({node, ...props}) => (
+                      <img className="max-w-full h-auto rounded-lg my-4 shadow-md" {...props} />
+                    ),
+                    input: ({node, ...props}) => {
+                      if (props.type === 'checkbox') {
+                        return (
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 mt-1" 
+                            disabled 
+                            {...props} 
+                          />
+                        );
+                      }
+                      return <input {...props} />;
+                    },
+                  }}
+                >
                   {value || '*预览区域*'}
                 </ReactMarkdown>
               </div>
