@@ -3,6 +3,9 @@ import { Share2, MessageCircle, Copy, Check, Globe, Lock } from 'lucide-react';
 import { ref, set, get, push, onValue, off } from 'firebase/database';
 import { database } from '../utils/firebase';
 import { getUserId } from '../utils/user';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 export default function SharedDiary({ article, sharedId: propSharedId, onClose }) {
   const [sharedId, setSharedId] = useState(propSharedId || null);
@@ -336,9 +339,14 @@ export default function SharedDiary({ article, sharedId: propSharedId, onClose }
                 <p className="text-sm text-slate-600 mb-3">
                   作者：{articleData.author} · {articleData.date}
                 </p>
-                <p className="text-slate-700 whitespace-pre-wrap">
-                  {articleData.content}
-                </p>
+                <div className="prose prose-slate max-w-none prose-headings:text-slate-800 prose-p:text-slate-700 prose-a:text-blue-600 prose-strong:text-slate-800 prose-code:text-pink-600 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:py-1 prose-li:text-slate-700">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                  >
+                    {articleData.content}
+                  </ReactMarkdown>
+                </div>
               </div>
 
               <div className="border border-slate-200 rounded-lg">
