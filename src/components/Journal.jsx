@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Globe, Plus, X, Tag, FolderOpen, Settings } from 'lucide-react';
+import { Share2, Globe, Plus, X, Tag, FolderOpen, Settings, ArrowLeft, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import JournalArchive from './JournalArchive';
 import SharedDiary from './SharedDiary';
 import SharedPlaza from './SharedPlaza';
@@ -62,6 +63,9 @@ export default function Journal() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryEmoji, setNewCategoryEmoji] = useState('📁');
   const [newCategoryColor, setNewCategoryColor] = useState('blue');
+  
+  // 查看文章
+  const [viewingArticle, setViewingArticle] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('w3_journal', JSON.stringify(articles));
@@ -190,6 +194,16 @@ export default function Journal() {
 
   const viewSharedDiary = (sharedId) => {
     setViewingSharedId(sharedId);
+  };
+
+  // 查看文章详情
+  const viewArticle = (article) => {
+    setViewingArticle(article);
+  };
+
+  // 返回列表
+  const backToList = () => {
+    setViewingArticle(null);
   };
 
   const filteredArticles = articles.filter(article => {
@@ -451,6 +465,127 @@ export default function Journal() {
   }
 
   // 列表/归档/广场模式
+  // 查看文章模式
+  if (viewingArticle) {
+    const categoryStyle = getCategoryStyle(viewingArticle.category);
+    return (
+      <div className="flex gap-6 h-[calc(100vh-200px)]">
+        {/* 左侧文章目录 */}
+        <div className="w-72 flex-shrink-0 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <button
+              onClick={backToList}
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium mb-3"
+            >
+              <ArrowLeft size={18} />
+              返回列表
+            </button>
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <FolderOpen size={18} />
+              文章目录
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">共 {articles.length} 篇文章</p>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-2">
+            {articles.map(article => {
+              const isActive = article.id === viewingArticle.id;
+              const style = getCategoryStyle(article.category);
+              return (
+                <button
+                  key={article.id}
+                  onClick={() => setViewingArticle(article)}
+                  className={`w-full text-left p-3 rounded-lg mb-1 transition-all ${
+                    isActive 
+                      ? `${style.bg} ${style.border} border-2` 
+                      : 'hover:bg-slate-50 border-2 border-transparent'
+                  }`}
+                >
+                  <div className={`font-medium text-sm line-clamp-1 ${isActive ? style.text : 'text-slate-700'}`}>
+                    {getCategoryEmoji(article.category)} {article.title}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {article.date}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 右侧文章内容 */}
+        <div className="flex-1 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden flex flex-col">
+          {/* 文章头部 */}
+          <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h1 className="text-3xl font-bold text-slate-800 mb-3">{viewingArticle.title}</h1>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className={`px-3 py-1 rounded-lg ${categoryStyle.bg} ${categoryStyle.text} flex items-center gap-1`}>
+                    <span>{getCategoryEmoji(viewingArticle.category)}</span>
+                    <span>{viewingArticle.category}</span>
+                  </span>
+                  <span className="text-slate-500">📅 {viewingArticle.date}</span>
+                  <span className="text-slate-500">📝 {viewingArticle.content.length} 字</span>
+                </div>
+              </div>
+              <div className="flex gap-2 ml-4">
+                <button
+                  onClick={() => shareArticle(viewingArticle)}
+                  className="bg-green-50 text-green-600 hover:bg-green-100 rounded-lg px-4 py-2 text-sm transition-colors flex items-center gap-1"
+                >
+                  <Share2 size={16} />
+                  分享
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingArticle(null);
+                    editArticle(viewingArticle);
+                  }}
+                  className="bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg px-4 py-2 text-sm transition-colors"
+                >
+                  编辑
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('确定删除这篇文章吗？')) {
+                      deleteArticle(viewingArticle.id);
+                      backToList();
+                    }
+                  }}
+                  className="bg-red-50 text-red-600 hover:bg-red-100 rounded-lg px-4 py-2 text-sm transition-colors"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* 文章内容 */}
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="prose prose-slate max-w-none prose-lg prose-headings:text-slate-800 prose-p:text-slate-700 prose-a:text-blue-600 prose-strong:text-slate-800 prose-code:text-pink-600 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:py-1 prose-li:text-slate-700">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+              >
+                {viewingArticle.content}
+              </ReactMarkdown>
+            </div>
+          </div>
+        </div>
+
+        {/* 分享弹窗 */}
+        {sharingArticle && (
+          <SharedDiary
+            article={sharingArticle}
+            onClose={() => setSharingArticle(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // 列表/归档/广场模式
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
@@ -549,7 +684,11 @@ export default function Journal() {
               filteredArticles.map(article => {
                 const categoryStyle = getCategoryStyle(article.category);
                 return (
-                  <div key={article.id} className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-all">
+                  <div 
+                    key={article.id} 
+                    className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-all cursor-pointer"
+                    onClick={() => viewArticle(article)}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-xl font-bold text-slate-800 mb-2">{article.title}</h3>
@@ -583,7 +722,15 @@ export default function Journal() {
                           {article.content.length > 200 && <span className="text-slate-400">...</span>}
                         </div>
                       </div>
-                      <div className="flex gap-2 ml-4">
+                      <div className="flex gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => viewArticle(article)}
+                          className="text-slate-500 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm transition-colors flex items-center gap-1"
+                          title="查看详情"
+                        >
+                          <Eye size={16} />
+                          查看
+                        </button>
                         <button
                           onClick={() => shareArticle(article)}
                           className="text-green-500 hover:bg-green-50 rounded-lg px-4 py-2 text-sm transition-colors flex items-center gap-1"
